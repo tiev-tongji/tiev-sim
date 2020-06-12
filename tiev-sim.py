@@ -214,6 +214,9 @@ vehicle_speed = 0.0
 aim_speed = 0.0
 aim_steer = 0.0
 
+heightDiff = 0.1
+heightMax = 2.0
+
 class CarControlPid():
     def __init__(self, k_p_steer=0.1, k_i_steer = 0.0, k_d_steer = 0.0,
                  k_p_acc=1.0, k_i_acc=0.0, k_d_acc=0.0,
@@ -409,14 +412,14 @@ class World(object):
 
     def restart(self):
         settings = self.world.get_settings()
-        settings.fixed_delta_seconds = 0.04
+        #settings.fixed_delta_seconds = 0.04
         self.world.apply_settings(settings)
         # Keep same camera config if the camera manager exists.
         cam_index = self.camera_manager.index if self.camera_manager is not None else 0
         cam_pos_index = self.camera_manager.transform_index if self.camera_manager is not None else 0
         # Get a random blueprint.
-        #blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))  # random choose a car model.
-        blueprint = random.choice(self.world.get_blueprint_library().filter('vehicle.carsim.*'))   # only use carsim car as player, only used in Carsim/Carla env.
+        blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))  # random choose a car model.
+        #blueprint = random.choice(self.world.get_blueprint_library().filter('vehicle.carsim.*'))   # only use carsim car as player, only used in Carsim/Carla env.
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('color'):
             color = random.choice(blueprint.get_attribute('color').recommended_values)
@@ -504,7 +507,7 @@ class World(object):
         self.gnss_sensor.roadmap.close()
 
     def pub_objectlist(self):
-        global tunnel, xcm_version
+        global tunnel, xcm_version, fusionmap
         actors = self.world.get_actors()
         # for actor in actors:
         #    print(actor)
@@ -536,7 +539,7 @@ class World(object):
             theta1_rad = self.player.get_transform().rotation.yaw / 180.0 * math.pi
             theta2 = actor.get_transform().rotation.yaw
             # TODO: 以下暂时只考虑水平面
-            theta = theta2 - theta1 + 90
+            theta = theta2 - theta1 + 90.0
             # -pi~pi
             theta = theta + 360 if theta < -180 else theta
             theta = theta - 360 if theta > 180 else theta
@@ -551,7 +554,7 @@ class World(object):
             loc = POSITION()
             loc.x = loc_vf[0]
             loc.y = loc_vf[1]
-            if loc.x > 20 or loc.x < -20 or loc.y > 80 or loc.y < -30:
+            if loc.x > fusionmap.cols * fusionmap.resolution * 0.5  or loc.x < -fusionmap.cols * fusionmap.resolution * 0.5 or loc.y > fusionmap.center_row * fusionmap.resolution or loc.y < -(fusionmap.rows - fusionmap.center_row) * fusionmap.resolution:
                 continue
             # 4 vertices of bounding box in relative location
             vertices = []
@@ -560,37 +563,64 @@ class World(object):
                 for j in range(2):
                     vertices.append((loc1.x - loc0.x + bb.location.x + (bb.extent.x if i > 0 else -bb.extent.x),
                                      loc1.y - loc0.y + bb.location.y + (bb.extent.y if j > 0 else -bb.extent.y) ))
+
+            #Bounding boxes in vehicle frame
             vertices_vf = []
             for vertex in vertices:
                 vertices_vf.append(Unreal2VF(theta1_rad, vertex[0], vertex[1]))
-            xmax = -sys.float_info.max
-            xmin = sys.float_info.max
-            ymax = -sys.float_info.max
-            ymin = sys.float_info.max
-            for vertex in vertices_vf:
-                xmax = vertex[0] if vertex[0] > xmax else xmax
-                xmin = vertex[0] if vertex[0] < xmin else xmin
-                ymax = vertex[1] if vertex[1] > ymax else ymax
-                ymin = vertex[1] if vertex[1] < ymin else ymin
-            obj.width = xmax - xmin
-            obj.length = ymax - ymin
-            corners = []
-            tmp = POSITION()
-            tmp.x = xmax; tmp.y = ymax
-            corners.append(tmp)
-            obj.corners.p1 = corners[0]
-            tmp = POSITION()
-            tmp.x = xmax; tmp.y = ymin
-            corners.append(tmp)
-            obj.corners.p2 = corners[1]
-            tmp = POSITION()
-            tmp.x = xmin; tmp.y = ymin
-            corners.append(tmp)
-            obj.corners.p3 = corners[2]
-            tmp = POSITION()
-            tmp.x = xmin; tmp.y = ymax
-            corners.append(tmp)
-            obj.corners.p4 = corners[3]
+
+            #distance1 = ((vertices_vf[0][0] - vertices_vf[1][0])**2 + (vertices_vf[0][1] - vertices_vf[1][1])**2)**(0.5)
+            #distance2 = ((vertices_vf[0][0] - vertices_vf[1][0])**2 + (vertices_vf[2][1] - vertices_vf[2][1])**2)**(0.5)
+            #obj.width = min(distance1, distance2)
+            #obj.length = max(distance1, distance2)
+            #obj.length = max(abs(vertices_vf[0] - vertices_vf[1]), abs(vertices_vf[2] - vertices_vf[0]))
+            tmpPt = POSITION()
+            tmpPt.x = vertices_vf[0][0] 
+            tmpPt.y = vertices_vf[0][1] 
+            obj.corners.p1 = tmpPt 
+            tmpPt = POSITION()
+            tmpPt.x = vertices_vf[1][0] 
+            tmpPt.y = vertices_vf[1][1] 
+            obj.corners.p2 = tmpPt 
+            tmpPt = POSITION()
+            tmpPt.x = vertices_vf[3][0] 
+            tmpPt.y = vertices_vf[3][1] 
+            obj.corners.p3 = tmpPt 
+            tmpPt = POSITION()
+            tmpPt.x = vertices_vf[2][0] 
+            tmpPt.y = vertices_vf[2][1] 
+            obj.corners.p4 = tmpPt 
+            
+            #xmax = -sys.float_info.max
+            #xmin = sys.float_info.max
+            #ymax = -sys.float_info.max
+            #ymin = sys.float_info.max
+            #for vertex in vertices_vf:
+            #    xmax = vertex[0] if vertex[0] > xmax else xmax
+            #    xmin = vertex[0] if vertex[0] < xmin else xmin
+            #    ymax = vertex[1] if vertex[1] > ymax else ymax
+            #    ymin = vertex[1] if vertex[1] < ymin else ymin
+
+            #obj.width = xmax - xmin
+            #obj.length = ymax - ymin
+            #corners = []
+            #tmp = POSITION()
+            #tmp.x = xmax; tmp.y = ymax
+            #corners.append(tmp)
+            #obj.corners.p1 = corners[0]
+            #tmp = POSITION()
+            #tmp.x = xmax; tmp.y = ymin
+            #corners.append(tmp)
+            #obj.corners.p2 = corners[1]
+            #tmp = POSITION()
+            #tmp.x = xmin; tmp.y = ymin
+            #corners.append(tmp)
+            #obj.corners.p3 = corners[2]
+            #tmp = POSITION()
+            #tmp.x = xmin; tmp.y = ymax
+            #corners.append(tmp)
+            #obj.corners.p4 = corners[3]
+
             # relative speed
             # TODO: 以下暂时只考虑水平面
             a = actor.get_acceleration()
@@ -607,6 +637,10 @@ class World(object):
             obj.pathNum = len(obj.path)
             objectlist.obj.append(obj)
         objectlist.count = len(objectlist.obj)
+        
+        print("sequence objectlist")
+        #modify fusionmap
+        
 
         if xcm_version == "LCM":
             try:
@@ -1451,7 +1485,6 @@ class CameraManager(object):
             tempData = np.reshape(tempData, (-1, 2))
             temp_img_size = (401 , 151)
             temp_img = np.zeros(temp_img_size, dtype = np.int32)
-            heightdiff = 0.1
             indices = ((tempData[:,0] >= 0) & (tempData[:,0] < 151) & (tempData[:,1] >= 0) & (tempData[:,1] < 401))
             tempData = tempData[np.where(indices == True)]
             pointstmp = points[np.where(indices == True)]
@@ -1461,11 +1494,16 @@ class CameraManager(object):
             groupmin = df.groupby(['row', 'col']).min().reset_index().values
             groupdata = groupmin.copy()
             groupdata[:,2] = groupmax[:,2] - groupmin[:,2]
-            indexz = groupdata[:,2] > heightdiff
+            #height difference
+            diffHeightindexz = groupdata[:,2] > heightDiff 
+            #height maximum scope
+            maxHeightindexz = groupmax[:,2] < heightMax            
+            #add two conditions
+            indexz = diffHeightindexz and maxHeightindexz
+            #object list
             groupdata = groupdata[np.where(indexz == True)][:,:2].astype(np.int32)
-            #print ("groupdata:", groupdata, ":groupdata")
             temp_img[tuple(groupdata.T)] = (2)#old 1
-            #print ("tmp_image:", temp_img, ":tmp_image")
+
             lasermsg = structFUSIONMAP()
             lasermsg.resolution = 0.2
             lasermsg.cols = 151
@@ -1475,7 +1513,7 @@ class CameraManager(object):
             lasermsg.cells = temp_img.tolist()
             tunnel.publish("FUSIONMAP",lasermsg)
             end = time.time()
-            print("FUSIONMAP TIME:" ,(start-end))
+            print("in parse lidar FUSIONMAP TIME:" ,(start-end))
         
 
     @staticmethod
@@ -1484,6 +1522,7 @@ class CameraManager(object):
         self = weak_self()
         if not self:
             return
+        
         if self.sensors[self.index][0].startswith('sensor.lidar'):
             start = time.time()
             #print("frame id: %d"%(image.frame_number))
@@ -1552,9 +1591,12 @@ class CameraManager(object):
             groupmin = df.groupby(['row', 'col']).min().reset_index().values
             groupdata = groupmin.copy()
             groupdata[:,2] = groupmax[:,2] - groupmin[:,2]
-            indexz = groupdata[:,2] > heightdiff
-            groupdata = groupdata[np.where(indexz == True)][:,:2].astype(np.int32)
-            #print ("groupdata:", groupdata, ":groupdata")
+            #height difference
+            diffHeightindexz = groupdata[:,2] > heightDiff 
+            #height maximum scope
+            maxHeightindexz = groupmax[:,2] < heightMax            
+            #object list
+            groupdata = groupdata[np.where(diffHeightindexz == True) and np.where(maxHeightindexz == True)][:,:2].astype(np.int32)
             temp_img[tuple(groupdata.T)] = (2)#old 1
             #print ("tmp_image:", temp_img, ":tmp_image")
             lasermsg = structFUSIONMAP()
@@ -1567,6 +1609,7 @@ class CameraManager(object):
             tunnel.publish("FUSIONMAP",lasermsg)
             end = time.time()
             print("FUSIONMAP TIME:" ,(start-end))
+            print("sequence Fusionmap")
 
             lidar_data = np.array(points[:, :2])
             lidar_data *= min(self.hud.dim) / 100.0
@@ -1675,7 +1718,7 @@ class PCDHandlerProcess(Process):
         lasermsg.center_row = 300
         lasermsg.cells = temp_img.tolist()
         tunnel.publish("FUSIONMAP",lasermsg)
-        print("publish fusionmap\n")
+        print("pcd to fusion publish fusionmap\n")
 # ==============================================================================
 # -- LaneDetector --------------------------------------------------------------
 # ==============================================================================
@@ -1914,7 +1957,6 @@ def game_loop(args):
 
         GnssSensor.start_pub_navinfo(40.0) # async publish
         GnssSensor.start_pub_caninfo(40.0)
-        #CameraManager.start_pub_fusionmap()
         start_sub()
 
         clock = pygame.time.Clock()

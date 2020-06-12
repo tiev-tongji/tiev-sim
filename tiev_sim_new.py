@@ -55,10 +55,8 @@ import os
 import sys
 
 try:
-    sys.path.remove('/home/autolab/.local/lib/python3.5/site-packages/carla-0.9.4-py3.5-linux-x86_64.egg')
     sys.path.append('/home/autolab/0.9.6/PythonAPI/carla/dist/carla-0.9.6-py3.5-linux-x86_64.egg')
-    sys.path.append('/home/autolab/0.9.6/PythonAPI/examples/carla-0.9.6-py3.5-linux-x86_64.egg')
-    sys.path.append('/usr/local/lib/python3.5/site-packages/')
+    #sys.path.append('/usr/local/lib/python3.5/site-packages/')
 except:
     pass
 try:
@@ -421,14 +419,14 @@ class World(object):
 
     def restart(self):
         settings = self.world.get_settings()
-        settings.fixed_delta_seconds = 0.05
+        #settings.fixed_delta_seconds = 0.05
         self.world.apply_settings(settings)
         # Keep same camera config if the camera manager exists.
         cam_index = self.camera_manager.index if self.camera_manager is not None else 0
         cam_pos_index = self.camera_manager.transform_index if self.camera_manager is not None else 0
         # Get a random blueprint.
-        #blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))  # random choose a car model.
-        blueprint = random.choice(self.world.get_blueprint_library().filter('vehicle.carsim.*'))   # only use carsim car as player, only used in Carsim/Carla env.
+        blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))  # random choose a car model.
+        #blueprint = random.choice(self.world.get_blueprint_library().filter('vehicle.carsim.*'))   # only use carsim car as player, only used in Carsim/Carla env.
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('color'):
             color = random.choice(blueprint.get_attribute('color').recommended_values)
@@ -2007,7 +2005,7 @@ def main():
     argparser.add_argument(
         '--res',
         metavar='WIDTHxHEIGHT',
-        default='1920x1080',
+        default='1280x720',
         help='window resolution (default: 1280x720)')
     argparser.add_argument(
         '--filter',
