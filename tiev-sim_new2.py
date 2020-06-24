@@ -598,16 +598,13 @@ class World(object):
             objectlist.obj.append(obj)
         objectlist.count = len(objectlist.obj)
 
-        if xcm_version == "LCM":
-            try:
+        try:
+            if xcm_version == "LCM":
                 tunnel.publish('OBJECTLIST', objectlist.encode())
-            except:
-                print('error publishing OBJECTLIST!')
-        elif xcm_version == "ZCM":
-            try:
-                tunnel.publish("OBJECTLIST", objectlist)
-            except:
-                print('error publishing OBJECTLIST!')
+            elif xcm_version == "ZCM":
+                tunnel.publish('OBJECTLIST', objectlist)
+        except:
+            print('error publishing OBJECTLIST!')
 
 
 # ==============================================================================
@@ -1316,7 +1313,8 @@ class CameraManager(object):
                 for attr_name, attr_value in item[3].items():
                     bp.set_attribute(attr_name, attr_value)
             elif item[0].startswith('sensor.lidar'):
-                bp.set_attribute('range', '5000') # 200 meters
+                self.lidar_range = 50 # meters (0.9.6 or previous: centimeters)
+                bp.set_attribute('range', str(self.lidar_range))
                 bp.set_attribute('rotation_frequency', str(40))#20
                 bp.set_attribute('channels', str(64))
                 bp.set_attribute('points_per_second', str(350000))#450000
@@ -1473,7 +1471,10 @@ class CameraManager(object):
             lasermsg.center_col = 75
             lasermsg.center_row = 300
             lasermsg.cells = temp_img.tolist()
-            tunnel.publish("FUSIONMAP",lasermsg)
+            if xcm_version == "LCM":
+                tunnel.publish("FUSIONMAP",lasermsg.encode())
+            elif xcm_version == "ZCM":
+                tunnel.publish("FUSIONMAP",lasermsg)
             end = time.time()
             #print("FUSIONMAP TIME:" ,(start-end))
         
@@ -1586,18 +1587,21 @@ class CameraManager(object):
             lasermsg.center_col = 75
             lasermsg.center_row = 300
             lasermsg.cells = temp_img.tolist()
-            tunnel.publish("FUSIONMAP",lasermsg)
+            if xcm_version == "LCM":
+                tunnel.publish("FUSIONMAP",lasermsg.encode())
+            elif xcm_version == "ZCM":
+                tunnel.publish("FUSIONMAP",lasermsg)
             end = time.time()
             #print("FUSIONMAP TIME:" ,(start-end))
 
             lidar_data = np.array(points[:, :2])
-            lidar_data *= min(self.hud.dim) / 100.0
+            lidar_data *= min(self.hud.dim) / (2.0 * self.lidar_range)
             lidar_data += (0.5 * self.hud.dim[0], 0.5 * self.hud.dim[1])
             lidar_data = np.fabs(lidar_data)
             lidar_data = lidar_data.astype(np.int32)
             lidar_data = np.reshape(lidar_data, (-1, 2))
             lidar_img_size = (self.hud.dim[0], self.hud.dim[1], 3)
-            lidar_img = np.zeros(lidar_img_size)
+            lidar_img = np.zeros((lidar_img_size), dtype=np.uint8)
             lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
             self.surface = pygame.surfarray.make_surface(lidar_img)
         else:
@@ -1704,8 +1708,11 @@ class PCDHandlerProcess(Process):
         lasermsg.center_col = 75
         lasermsg.center_row = 300
         lasermsg.cells = temp_img.tolist()
-        tunnel.publish("FUSIONMAP",lasermsg)
-        print("publish fusionmap\n")
+        if xcm_version == "LCM":
+            tunnel.publish("FUSIONMAP",lasermsg.encode())
+        elif xcm_version == "ZCM":
+            tunnel.publish("FUSIONMAP",lasermsg)
+
 # ==============================================================================
 # -- LaneDetector --------------------------------------------------------------
 # ==============================================================================
