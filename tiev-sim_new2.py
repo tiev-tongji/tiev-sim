@@ -147,32 +147,17 @@ except ImportError:
         raise RuntimeError('cannot import lcm or zcm, make sure lcm package is installed')
 
 sys.path.append('../')
-if xcm_version=="LCM":
-    try:
-        import icumsg_lcm
-        from icumsg_lcm import structNAVINFO
-        from icumsg_lcm import structFUSIONMAP
-        #from icumsg_lcm import structCARCONTROL
-        #from icumsg_lcm import structAIMPATHINT
-        from icumsg_lcm import structCANCONTROL
-        from icumsg_lcm import structCANINFO
-        from icumsg_lcm import LinePoint, LANE, structLANES
-    except ImportError:
-        raise RuntimeError("cannot import lcm defination")
-elif xcm_version=="ZCM":
-    try:
-        import icumsg_zcm
-        from icumsg_zcm import structNAVINFO
-        from icumsg_zcm import structFUSIONMAP
-        #from icumsg_zcm import structCARCONTROL
-        #from icumsg_zcm import structAIMPATHINT
-        from icumsg_zcm import structCANINFO
-        from icumsg_zcm import structCANCONTROL
-        from icumsg_zcm import LinePoint, LaneLine, LANE, structLANES
-        from icumsg_zcm import POSITION, BOUNDINGBOX, OBJECT, structOBJECTLIST
-        from icumsg_zcm import pt, structCARLACLOUD
-    except ImportError:
-        raise RuntimeError("cannot import zcm defination")
+try:
+    import icumsg
+    from icumsg import structNAVINFO
+    from icumsg import structFUSIONMAP
+    #from icumsg import structCARCONTROL
+    #from icumsg import structAIMPATHINT
+    from icumsg import structCANCONTROL
+    from icumsg import structCANINFO
+    from icumsg import LinePoint, LANE, structLANES
+except ImportError:
+    raise RuntimeError("cannot import lcm defination")
 
 try:
     import utm
